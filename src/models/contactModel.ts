@@ -1,4 +1,4 @@
-import { pool } from '../db';
+import pool from '../db';
 
 export async function findContactsByEmailOrPhone(email: string, phone: string) {
   const result = await pool.query(
