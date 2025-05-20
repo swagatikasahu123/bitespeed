@@ -1,74 +1,73 @@
 import { Request, Response } from 'express';
 import { findContactsByEmailOrPhone, createContact } from '../models/contactModel';
 
+interface Contact {
+  id: number;
+  email: string | null;
+  phonenumber: string | null;
+  linkedid: number | null;
+  linkprecedence: 'primary' | 'secondary';
+  createdat?: Date;
+  updatedat?: Date;
+  deletedat?: Date | null;
+}
+
 export const identifyContact = async (req: Request, res: Response): Promise<void> => {
-try {
-const { email, phoneNumber } = req.body;
-if (!email && !phoneNumber) {
-  res.status(400).json({ error: "email or phoneNumber required" });
-  return;
-}
-
-const existingContacts = await findContactsByEmailOrPhone(email, phoneNumber);
-
-// If no existing contacts, create a new primary contact
-if (existingContacts.length === 0) {
-  const newContact = await createContact(email, phoneNumber, null, 'primary');
-  res.json({
-    contact: {
-      primaryContactId: newContact.id,
-      emails: [newContact.email],
-      phoneNumbers: [newContact.phoneNumber],
-      secondaryContactIds: []
+  try {
+    const { email, phoneNumber } = req.body;
+    if (!email && !phoneNumber) {
+      res.status(400).json({ error: "email or phoneNumber required" });
+      return;
     }
-  });
-  return;
-}
 
-// Consolidate all contacts
-let primary = existingContacts.find(c => c.linkprecedence === 'primary') || existingContacts[0];
-const emails = new Set<string>();
-const phones = new Set<string>();
-const secondaryIds: number[] = [];
+    const existingContacts: Contact[] = await findContactsByEmailOrPhone(email, phoneNumber);
 
-for (const contact of existingContacts) {
-  if (contact.email) emails.add(contact.email);
-  if (contact.phonenumber) phones.add(contact.phonenumber);
-  if (contact.id !== primary.id) secondaryIds.push(contact.id);
-}
+    // If no existing contacts, create a new primary contact
+    if (existingContacts.length === 0) {
+      const newContact = await createContact(email, phoneNumber, null, 'primary');
+      res.json({
+        contact: {
+          primaryContactId: newContact.id,
+          emails: [newContact.email],
+          phoneNumbers: [newContact.phoneNumber],
+          secondaryContactIds: []
+        }
+      });
+      return;
+    }
 
-const existingEmails = existingContacts.map(c => c.email);
-const existingPhones = existingContacts.map(c => c.phonenumber);
+    // Consolidate all contacts
+    let primary: Contact = existingContacts.find((c: Contact) => c.linkprecedence === 'primary') || existingContacts[0];
+    const emails = new Set<string>();
+    const phones = new Set<string>();
+    const secondaryIds: number[] = [];
 
-if ((email && !existingEmails.includes(email)) || (phoneNumber && !existingPhones.includes(phoneNumber))) {
-  const newSecondary = await createContact(email, phoneNumber, primary.id, 'secondary');
-  secondaryIds.push(newSecondary.id);
-  if (email) emails.add(email);
-  if (phoneNumber) phones.add(phoneNumber);
-}
+    for (const contact of existingContacts) {
+      if (contact.email) emails.add(contact.email);
+      if (contact.phonenumber) phones.add(contact.phonenumber);
+      if (contact.id !== primary.id) secondaryIds.push(contact.id);
+    }
 
-res.json({
-  contact: {
-    primaryContactId: primary.id,
-    emails: Array.from(emails),
-    phoneNumbers: Array.from(phones),
-    secondaryContactIds: secondaryIds
+    const existingEmails: (string | null)[] = existingContacts.map((c: Contact) => c.email);
+    const existingPhones: (string | null)[] = existingContacts.map((c: Contact) => c.phonenumber);
+
+    if ((email && !existingEmails.includes(email)) || (phoneNumber && !existingPhones.includes(phoneNumber))) {
+      const newSecondary = await createContact(email, phoneNumber, primary.id, 'secondary');
+      secondaryIds.push(newSecondary.id);
+      if (email) emails.add(email);
+      if (phoneNumber) phones.add(phoneNumber);
+    }
+
+    res.json({
+      contact: {
+        primaryContactId: primary.id,
+        emails: Array.from(emails),
+        phoneNumbers: Array.from(phones),
+        secondaryContactIds: secondaryIds
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal server error' });
   }
-});
-} catch (error) {
-  console.error(error);
-  res.status(500).json({ error: 'Internal server error' });
-  }
-  };
-
-
-
-
-
-
-
-
-
-
-
-
+};
